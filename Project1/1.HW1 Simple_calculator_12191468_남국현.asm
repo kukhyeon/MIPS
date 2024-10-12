@@ -28,7 +28,9 @@ main:	la 	$a0,input  		# print
 		li  $v0,8 	    	# read string
 		syscall
 		la	$t0, exp		# exp의 base address load
-		jal load_input		# load operand1, 2, operator
+		jal load_input		# load operand 1, 2, operator
+		jal signchecker	
+		jal check_s4
 		jal	operator		# decide operation
 		jal	print			# print result
 		
@@ -44,15 +46,42 @@ load_input: addi 	$sp, $sp, -4	# 스택에 공간 확보
 			sw 		$ra, 0($sp)		# $ra 값을 스택에 저장
 			li      $s0, 0          # 첫 번째 피연산자 초기화
         	li      $s1, 0          # 두 번째 피연산자 초기화
-			jal 	op1
-			lb 		$t2,0($t0)		# load operator to $t2
-			addi	$t0, $t0, 1		# 다음 주소로          
-			jal 	op2
+
+			jal 	op1comp			# 음수 여부 확인하는 서브루틴
+			jal 	op1				# op1 subroutine
+			
+			lb 		$t2, 0($t0)		# load operator to $t2
+			addi	$t0, $t0, 1		# 다음 주소로
+
+			jal 	op2comp    		# 음수 여부 확인하는 서브루틴  
+			jal 	op2				# op2 subroutine
 
 			lw 		$ra, 0($sp)		# 스택에서 $ra 값 복원
 			addi 	$sp, $sp, 4		# 스택 포인터 복원
 			jr   	$ra				# return from subroutine    
+op1comp:
+			lb      $t1, 0($t0)         # 현재 문자 로드
+			lb      $t2, minus          # '-' 문자 로드
+			beq     $t1, $t2, op1_neg   # '-'이면 음수 처리로 분기
+			li      $s3, 0              # 양수 부호 플래그 설정
+			jr      $ra                 # load_input으로 복귀
 
+op1_neg:
+			li      $s3, 1              # 음수 부호 플래그 설정
+			addi    $t0, $t0, 1         # 다음 문자로 이동
+			jr      $ra                 # load_input으로 복귀
+
+op2comp:
+			lb      $t1, 0($t0)         # 현재 문자 로드
+			lb      $s5, minus          # '-' 문자 로드
+			beq     $t1, $s5, op2_neg   # '-'이면 음수 처리로 분기
+			li      $s4, 0              # 양수 부호 플래그 설정
+			jr      $ra                 # load_input으로 복귀
+
+op2_neg:
+			li      $s4, 1              # 음수 부호 플래그 설정
+			addi    $t0, $t0, 1         # 다음 문자로 이동
+			jr      $ra                 # load_input으로 복귀
 op1:		lb		$t1,0($t0)     	# 현재 문자 load
 			beq     $t1, '\n', end_op   # 개행 문자 처리
 			beq     $t1, '\0', end_op   # 널 종결자 처리
@@ -87,8 +116,21 @@ op2:		lb		$t1,0($t0)     	# 현재 문자 load
 
 end_op: 	jr $ra
 
+signchecker:
+    		bne     $s3, $zero, neg_op1   # $s3 != 0이면 neg_op1으로 분기 (음수이면)
+			jr		$ra
+check_s4:
+    		bne     $s4, $zero, neg_op2   # $s4 != 0이면 neg_op2로 분기 (음수이면)
+			jr		$ra					 # main으로 복귀
+
+neg_op1: 	neg		$s0, $s0
+			jr		$ra
+			
+neg_op2: 	neg		$s1, $s1
+			jr 		$ra				 # main으로 복귀
+
 operator:	lb 		$t5, plus		# load "+" to $t5
-			lb		$t6, minus		# load "-" to $t5
+			lb		$t6, minus		# load "-" to $t6
 			lb      $t7, multiple    # '*' 로드
 			lb      $t8, divider     # '/' 로드
 
@@ -114,13 +156,13 @@ mul_op:		mul     $s2, $s0, $s1       # operand1 * operand2
 
 div_op:
 			beq     $s1, $zero, div_errorL   # 에러 레이블로 분기
-			div     $s0, $s1
-			mflo    $s2
+			div     $s0, $s1				 # operand1 / operand2
+			mflo    $s2						 
 			jr      $ra
 
 div_errorL:
-			la      $a0, div_error      # "0으로 나눌 수 없습니다." 출력
-			li      $v0, 4
+			la      $a0, div_error      # load div_error
+			li      $v0, 4				# error 출력
 			syscall
 			b       _end                # 프로그램 종료
 
